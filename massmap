@@ -8,36 +8,60 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+# Default settings
+USE_MASSCAN=true
+RATE=3000
+
+# Parse arguments
+if [[ "$1" == "-n" || "$1" == "--nmap-only" ]]; then
+    USE_MASSCAN=false
+    shift
+fi
+
 if [ $# -lt 2 ]; then
-    echo -e "${RED}Usage:${NC} $0 <output_name> <target_ip>"
-    echo -e "Example: $0 blocky_results 10.129.238.31"
+    echo -e "${RED}Usage:${NC}"
+    echo -e "  $0 <output_name> <target_ip>           # Run Masscan + 2 Nmap scans"
+    echo -e "  $0 -n <output_name> <target_ip>        # Run only 2 Nmap scans"
+    echo -e "  $0 --nmap-only <output_name> <target_ip>"
+    echo -e ""
+    echo -e "Example:"
+    echo -e "  $0 swagshop 10.129.229.138"
+    echo -e "  $0 -n swagshop 10.129.229.138"
     exit 1
 fi
 
 OUTPUT=$1
 TARGET=$2
-RATE=3000   # Slightly lower rate for better reliability
 
 echo -e "${BLUE}==============================================${NC}"
 echo -e "${GREEN}[*] Target      : ${TARGET}${NC}"
 echo -e "${GREEN}[*] Output Name : ${OUTPUT}${NC}"
 echo -e "${GREEN}[*] Min Rate    : ${RATE}${NC}"
+if [ "$USE_MASSCAN" = true ]; then
+    echo -e "${GREEN}[*] Mode        : Masscan + 2 Nmap scans${NC}"
+else
+    echo -e "${GREEN}[*] Mode        : Nmap only (2 scans)${NC}"
+fi
 echo -e "${BLUE}==============================================${NC}"
 
 #######################################
-# 1. Masscan
+# 1. Masscan (Optional)
 #######################################
-echo -e "\n${YELLOW}[+] Running Masscan on tun0...${NC}"
-timeout 120s sudo masscan -p1-65535 $TARGET --rate=$RATE -e tun0 --wait 0 -oL ${OUTPUT}_masscan.txt
+MASSCAN_PORTS=""
 
-echo -e "${GREEN}[+] Masscan completed${NC}"
+if [ "$USE_MASSCAN" = true ]; then
+    echo -e "\n${YELLOW}[+] Running Masscan on tun0...${NC}"
+    
+    timeout 45s sudo masscan -p1-65535 $TARGET --rate=$RATE -e tun0 --wait 0 --open-only -oL ${OUTPUT}_masscan.txt 2>/dev/null
 
-echo -e "\n${GREEN}[+] Open ports found by Masscan:${NC}"
-if grep -q "open" ${OUTPUT}_masscan.txt 2>/dev/null; then
-    grep "open" ${OUTPUT}_masscan.txt | awk '{print $3}' | sort -n | tr '\n' ' '
-    echo
+    if [ -f "${OUTPUT}_masscan.txt" ] && grep -q "open" ${OUTPUT}_masscan.txt 2>/dev/null; then
+        MASSCAN_PORTS=$(grep "open" ${OUTPUT}_masscan.txt | awk '{print $3}' | sort -n | uniq | tr '\n' ' ')
+        echo -e "${GREEN}[+] Masscan found ports: ${MASSCAN_PORTS}${NC}"
+    else
+        echo -e "${YELLOW}[!] Masscan found no ports or failed. Continuing with Nmap...${NC}"
+    fi
 else
-    echo "None"
+    echo -e "\n${YELLOW}[!] Skipping Masscan (Nmap-only mode)${NC}"
 fi
 
 #######################################
@@ -59,40 +83,35 @@ echo -e "\n${BLUE}==============================================${NC}"
 echo -e "${CYAN}           SCAN COMPARISON SUMMARY${NC}"
 echo -e "${BLUE}==============================================${NC}"
 
-# Extract ports
-masscan_ports=$(grep "open" ${OUTPUT}_masscan.txt 2>/dev/null | awk '{print $3}' | sort -n | uniq)
+masscan_ports=$(echo $MASSCAN_PORTS | tr ' ' '\n' | sort -n | uniq)
 nmap1_ports=$(grep -E "^[0-9]+/tcp\s+open" ${OUTPUT}_1.nmap 2>/dev/null | cut -d'/' -f1 | sort -n | uniq)
 nmap2_ports=$(grep -E "^[0-9]+/tcp\s+open" ${OUTPUT}_2.nmap 2>/dev/null | cut -d'/' -f1 | sort -n | uniq)
 
-echo -e "\n${YELLOW}[*] Masscan Ports:${NC}   ${masscan_ports:-None}"
-echo -e "${YELLOW}[*] Nmap #1 Ports:${NC}   ${nmap1_ports:-None}"
-echo -e "${YELLOW}[*] Nmap #2 Ports:${NC}   ${nmap2_ports:-None}"
+echo -e "\n${YELLOW}[*] Masscan Ports:${NC} ${masscan_ports:-None}"
+echo -e "${YELLOW}[*] Nmap #1 Ports:${NC} ${nmap1_ports:-None}"
+echo -e "${YELLOW}[*] Nmap #2 Ports:${NC} ${nmap2_ports:-None}"
 
 echo -e "\n${CYAN}----------- Changes Detected -----------${NC}"
 
-# New ports in Scan #2
-new_in_scan2=$(comm -13 <(echo -e "$masscan_ports\n$nmap1_ports" | sort -n | uniq) <(echo "$nmap2_ports"))
+new_in_scan2=$(comm -13 <(echo -e "$masscan_ports\n$nmap1_ports" | sort -n | uniq) <(echo "$nmap2_ports") 2>/dev/null)
 echo -e "\n${GREEN}[+] New ports appeared in Nmap #2:${NC}"
 echo "${new_in_scan2:-None}"
 
-# Ports only found by Masscan
-only_masscan=$(comm -23 <(echo "$masscan_ports") <(echo -e "$nmap1_ports\n$nmap2_ports" | sort -n | uniq))
+only_masscan=$(comm -23 <(echo "$masscan_ports") <(echo -e "$nmap1_ports\n$nmap2_ports" | sort -n | uniq) 2>/dev/null)
 echo -e "\n${YELLOW}[+] Only found by Masscan:${NC}"
 echo "${only_masscan:-None}"
 
-# Ports only found in Nmap #1
-only_nmap1=$(comm -23 <(echo "$nmap1_ports") <(echo -e "$masscan_ports\n$nmap2_ports" | sort -n | uniq))
+only_nmap1=$(comm -23 <(echo "$nmap1_ports") <(echo -e "$masscan_ports\n$nmap2_ports" | sort -n | uniq) 2>/dev/null)
 echo -e "\n${YELLOW}[+] Only found in Nmap #1:${NC}"
 echo "${only_nmap1:-None}"
 
-# Final confirmed ports (appeared in at least 2 tools/scans)
 echo -e "\n${GREEN}[+] Final Confirmed Open Ports:${NC}"
-confirmed=$(echo -e "$masscan_ports\n$nmap1_ports\n$nmap2_ports" | sort -n | uniq -c | awk '$1 >= 2 {print $2}')
+confirmed=$(echo -e "$masscan_ports\n$nmap1_ports\n$nmap2_ports" | sort -n | uniq -c | awk '$1 >= 2 {print $2}' | tr '\n' ' ')
 echo "${confirmed:-None}"
 
 echo -e "\n${BLUE}==============================================${NC}"
 echo -e "${GREEN}[+] Scan finished${NC}"
-echo -e "    • ${OUTPUT}_masscan.txt"
+echo -e "    • ${OUTPUT}_masscan.txt (if used)"
 echo -e "    • ${OUTPUT}_1.nmap"
 echo -e "    • ${OUTPUT}_2.nmap"
 echo -e "${BLUE}==============================================${NC}"
