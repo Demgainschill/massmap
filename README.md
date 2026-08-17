@@ -25,3 +25,68 @@ git clone https://github.com/Demgainschill/massmap.git
 cd massmap
 chmod +x install.sh
 ./install.sh
+
+# Standard (Masscan + 2 Nmap scans with service detection)
+massmap swagshop 10.129.229.138
+
+# Faster & more reliable on HTB VPN
+massmap -r 1000 swagshop 10.129.229.138
+
+# 3 pure port scans, no service detection
+massmap -s -c 3 target 10.10.11.50
+
+# Nmap-only mode, 4 rounds
+massmap -n -c 4 box 10.129.1.23
+
+# Force interface + custom rate
+massmap -i tun0 -r 1500 machine 10.129.42.42
+
+### Options
+
+| Flag                      | Description                                      | Default       |
+|---------------------------|--------------------------------------------------|---------------|
+| `-n`, `--nmap-only`       | Skip Masscan                                     | off           |
+| `-s`, `--no-service`      | Skip `-sV -sC` (port discovery only)             | off           |
+| `-c`, `--count N`         | Number of Nmap scans (1–10)                      | `2`           |
+| `-r`, `--rate N`          | Packets per second                               | `2000`        |
+| `-i`, `--interface IFACE` | Force network interface                          | auto-detect   |
+| `-h`, `--help`            | Show help                                        | —             |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
