@@ -52,38 +52,10 @@ massmap -i tun0 -r 1500 machine 10.129.42.42
 | `-i`, `--interface IFACE` | Force network interface                          | auto-detect   |
 | `-h`, `--help`            | Show help                                        | —             |
 
+```
+### Screenshot
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+![Screenshot](https://github.com/user-attachments/assets/9018ed0d-d165-4770-9464-0863334525fa)
 
 
 
