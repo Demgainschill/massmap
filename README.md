@@ -1,18 +1,22 @@
 # Massmap
 
-Massmap is a simple reconnaissance tool that runs Masscan followed by two full Nmap scans against a target.  
-
-By comparing results across multiple scans, it helps identify inconsistent or delayed port responses, newly discovered ports, and ports that can be considered more reliable when detected more than once.
+**Massmap** is a reconnaissance helper designed for HTB / VPN environments.  
+It combines an optional Masscan discovery with a configurable number of full-port Nmap scans, then intelligently compares the results to surface consistent, newly-appeared, and flapping ports.
 
 ### Features
 
-- Optional fast Masscan discovery
-- Two independent full-port Nmap scans (`-sV -sC -p-`)
-- Ability to skip Masscan and run Nmap-only mode
-- Automatic comparison between scan results
-- Detects newly appeared ports
-- Shows ports found by only one scanner
-- Clean and readable `.nmap` output
+- **Smart interface selection** – Automatically picks the best interface (usually `tun0`) based on the route to the target. Can be forced with `-i`.
+- **Optional Masscan** – Fast initial discovery (can be skipped).
+- **Configurable Nmap rounds** – Run anywhere from 1 to 10 independent full-port Nmap scans (`-c`).
+- **Service scan toggle** – Choose whether to run `-sV -sC` or pure port discovery (`-s` / `--no-service`).
+- **Rate control** – Adjustable packet rate for both Masscan and Nmap.
+- **Advanced comparison**:
+  - Ports confirmed by ≥ 2 scanners
+  - Newly appeared open ports (were filtered/closed/missing earlier)
+  - Flapping ports
+  - Ports found only by Masscan
+- Clean, timestamped summary file + colored terminal output
+- Recommended ports string ready for further enumeration
 
 ### Installation
 
@@ -21,14 +25,3 @@ git clone https://github.com/Demgainschill/massmap.git
 cd massmap
 chmod +x install.sh
 ./install.sh
-
-massmap <output_name> <target_ip>
-
-Nmap-only mode
-massmap -n <output_name> <target_ip>
-massmap --nmap-only <output_name> <target_ip>
-
-Example
-massmap swagshop 10.129.229.138
-massmap -n swagshop 10.129.229.138
-
